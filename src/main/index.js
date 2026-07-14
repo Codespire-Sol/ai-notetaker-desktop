@@ -185,18 +185,23 @@ function deliverableEmails(list) {
 }
 
 // Find the calendar meeting happening right now (for auto-labeling a recording).
+// getTeamsStatus is async — it MUST be awaited, or `.connected` reads as undefined
+// on the pending promise and every recording silently falls back to "Untitled meeting".
 async function matchCurrentMeeting() {
   try {
-    if (!getTeamsStatus({ store }).connected || !msClientId()) return null
+    const status = await getTeamsStatus({ store })
+    if (!status.connected || !msClientId()) return null
     // look back 30 min so a meeting that just ended is still a match candidate
     const meetings = await getUpcomingMeetings({ store, clientId: msClientId(), lookbackMinutes: 30 })
     const now = Date.now()
     const grace = 15 * 60 * 1000   // ±15 min so early/late starts still match
-    const m = meetings.find((mm) => {
+    // Prefer the meeting we're actually inside; only then fall back to the grace window.
+    const inWindow = (mm, pad) => {
       const s = new Date(mm.start).getTime()
       const e = new Date(mm.end).getTime()
-      return (s - grace) <= now && now <= (e + grace)
-    })
+      return (s - pad) <= now && now <= (e + pad)
+    }
+    const m = meetings.find((mm) => inWindow(mm, 0)) || meetings.find((mm) => inWindow(mm, grace))
     if (!m) return null
     const langs = store.get('meetingLangs') || {}
     return { ...m, langPref: langs[m.id] || '' }
@@ -208,7 +213,11 @@ ipcMain.handle('meeting:process', async (_e, { audioPath, title, language = '', 
   // Link the recording to the calendar meeting happening now → title + attendees.
   const matched = await matchCurrentMeeting()
   const hasTitle = title && title.trim() && title.trim().toLowerCase() !== 'untitled meeting'
-  const finalTitle = hasTitle ? title.trim() : (matched?.title || title || 'Meeting')
+  // Never persist the "Untitled meeting" placeholder — if the calendar has no match,
+  // a date-stamped name is at least identifiable in the meetings list.
+  const finalTitle = hasTitle
+    ? title.trim()
+    : (matched?.title || `Meeting — ${new Date().toLocaleString()}`)
   const finalAttendees = (attendees && attendees.length) ? attendees : (matched?.attendees || [])
   // language priority: what the recorder sent → the meeting's saved language → auto
   const finalLang = (language && language.trim()) ? language : (matched?.langPref || '')

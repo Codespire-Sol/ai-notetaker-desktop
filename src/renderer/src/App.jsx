@@ -67,7 +67,7 @@ export default function App() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
             <ShieldCheck size={13} /> Runs locally
           </div>
-          Codespire Notetaker v1.0.4
+          Codespire Notetaker v1.0.5
         </div>
       </aside>
 
