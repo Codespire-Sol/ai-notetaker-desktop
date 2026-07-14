@@ -43,7 +43,8 @@
       {
         "provider": "github",
         "owner": "Codespire-Sol",
-        "repo": "ai-notetaker-desktop"
+        "repo": "ai-notetaker-desktop",
+        "releaseType": "release"
       }
     ],
     "files": [
