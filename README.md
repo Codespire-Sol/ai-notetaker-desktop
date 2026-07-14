@@ -46,12 +46,7 @@ After installing, open **Settings** and paste your OpenAI + Sarvam API keys — 
 |:---:|:---:|
 | <img src="docs/images/screenshot-meetings.png" alt="Meetings list" width="420" /><br/>**Meetings** — every recording, searchable, with its notes | <img src="docs/images/screenshot-record.png" alt="Recording" width="420" /><br/>**Recording** — system audio + mic, live timer and level meter |
 | <img src="docs/images/screenshot-meeting-detail.png" alt="AI notes and audio player" width="420" /><br/>**Meeting detail** — summary, action items, decisions + audio player | <img src="docs/images/screenshot-dashboard.png" alt="AI Dashboard" width="420" /><br/>**AI Dashboard** — token usage and ₹ cost per provider and operation |
-
-<div align="center">
-
-<img src="docs/images/screenshot-calendar.png" alt="Calendar" width="420" /><br/>**Calendar** — upcoming Teams / Outlook meetings, with a recording language per meeting
-
-</div>
+| <img src="docs/images/screenshot-calendar.png" alt="Calendar" width="420" /><br/>**Calendar** — upcoming Teams / Outlook meetings, with a recording language per meeting | <img src="docs/images/screenshot-settings.png" alt="Settings" width="420" /><br/>**Settings** — your own API keys, SMTP, Teams and meeting auto-detection |
 
 ---
 
