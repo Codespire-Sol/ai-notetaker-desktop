@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Settings as SettingsIcon, ListVideo, ShieldCheck, Mic, LayoutDashboard, CalendarDays, Radio, X } from 'lucide-react'
+import { Settings as SettingsIcon, ListVideo, ShieldCheck, Mic, LayoutDashboard, CalendarDays, Radio, X, RefreshCw, Download } from 'lucide-react'
 import Lock from './pages/Lock.jsx'
 import Settings from './pages/Settings.jsx'
 import Meetings from './pages/Meetings.jsx'
@@ -13,9 +13,16 @@ export default function App() {
   const [locked, setLocked] = useState(null)
   const [route, setRoute] = useState({ name: 'meetings', id: null })
   const [detected, setDetected] = useState(null)   // { app } when a call is detected (manual-prompt mode)
+  const [updateReady, setUpdateReady] = useState(null)   // { version } once a new build is downloaded
 
   useEffect(() => {
     window.api.pinStatus().then((s) => setLocked(!!(s.enabled && s.isSet)))
+  }, [])
+
+  // Auto-update: the main process downloads a newer release in the background.
+  useEffect(() => {
+    const off = window.api.onUpdateReady((info) => setUpdateReady(info || {}))
+    return () => off && off()
   }, [])
 
   // Meeting auto-detection: main process tells us when a call starts/ends.
@@ -60,11 +67,29 @@ export default function App() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
             <ShieldCheck size={13} /> Runs locally
           </div>
-          Codespire Notetaker v1.0
+          Codespire Notetaker v1.0.4
         </div>
       </aside>
 
       <main className="main">
+        {/* A newer version has been downloaded and is ready to install */}
+        {updateReady && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 12, margin: '16px 40px 0',
+            padding: '12px 16px', background: 'var(--brand-soft)', border: '1px solid var(--brand)',
+            borderRadius: 10, color: 'var(--text)'
+          }}>
+            <Download size={18} color="var(--brand)" />
+            <span style={{ flex: 1, fontSize: 14, fontWeight: 500 }}>
+              Version {updateReady.version || 'update'} is ready to install.
+            </span>
+            <button className="btn" onClick={() => window.api.installUpdate()}>
+              <RefreshCw size={15} /> Restart &amp; update
+            </button>
+            <button className="btn ghost" onClick={() => setUpdateReady(null)} title="Later"><X size={16} /></button>
+          </div>
+        )}
+
         {/* Meeting-detected banner (shown when auto-record is OFF) */}
         {detected && route.name !== 'record' && (
           <div style={{

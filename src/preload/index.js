@@ -36,6 +36,19 @@ const api = {
   // Usage / dashboard
   usageStats: () => ipcRenderer.invoke('usage:stats'),
 
+  // Auto-update
+  installUpdate: () => ipcRenderer.invoke('update:install'),
+  onUpdateReady: (cb) => {
+    const h = (_e, data) => cb(data)
+    ipcRenderer.on('update:ready', h)
+    return () => ipcRenderer.removeListener('update:ready', h)
+  },
+  onUpdateProgress: (cb) => {
+    const h = (_e, data) => cb(data)
+    ipcRenderer.on('update:progress', h)
+    return () => ipcRenderer.removeListener('update:progress', h)
+  },
+
   // Meeting auto-detection
   setRecordingState: (on) => ipcRenderer.invoke('recorder:setRecording', on),
   onCallStarted: (cb) => {

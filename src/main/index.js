@@ -14,6 +14,7 @@ import { listMeetings, getMeeting, addMeeting, updateMeeting, deleteMeeting } fr
 import { logUsage, getUsageStats } from './services/usage.js'
 import { startMeetingDetector } from './services/detector.js'
 import { isMac, startSystemAudio, stopSystemAudio } from './services/mac-audio.js'
+import { initAutoUpdate, installUpdate } from './services/updater.js'
 
 // ── Persistent settings store ─────────────────────────────────────────────
 const store = new Store({
@@ -261,6 +262,9 @@ ipcMain.handle('meeting:process', async (_e, { audioPath, title, language = '', 
 
 ipcMain.handle('usage:stats', () => getUsageStats())
 
+// ── Auto-update ─────────────────────────────────────────────────────────────
+ipcMain.handle('update:install', () => installUpdate())
+
 // ── Meetings CRUD ───────────────────────────────────────────────────────────
 ipcMain.handle('meetings:list', () => listMeetings())
 ipcMain.handle('meetings:get', (_e, id) => getMeeting(id))
@@ -346,6 +350,9 @@ app.whenReady().then(() => {
 
   createWindow()
   createTray()
+
+  // Check for a newer release and download it in the background (Windows).
+  initAutoUpdate(() => mainWindow)
 
   // Meeting detector — detect an active call (a non-self app using the mic) and
   // notify / auto-record. It keeps polling during our recording (our own app is
