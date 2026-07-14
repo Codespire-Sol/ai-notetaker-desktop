@@ -3,7 +3,7 @@ import { join } from 'path'
 import fs from 'fs'
 import crypto from 'crypto'
 import { spawn } from 'child_process'
-import ffmpegPath from 'ffmpeg-static'
+import { ffmpegPath } from './services/ffmpeg-path.js'
 import Store from 'electron-store'
 import 'dotenv/config'
 

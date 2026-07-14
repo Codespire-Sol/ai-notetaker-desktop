@@ -7,7 +7,7 @@ import { spawn } from 'child_process';
 import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
-import ffmpegPath from 'ffmpeg-static';
+import { ffmpegPath } from './ffmpeg-path.js';
 
 // ── Constants ────────────────────────────────────────────────────────────
 
