@@ -1,0 +1,41 @@
+{
+  "name": "codespire-notetaker",
+  "version": "0.1.0",
+  "description": "Codespire Notetaker — local meeting recorder with AI transcription & summaries",
+  "author": "Codespire Solutions",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "package:win": "electron-vite build && electron-builder --win",
+    "package:mac": "electron-vite build && electron-builder --mac"
+  },
+  "dependencies": {
+    "@fontsource/inter": "^5.2.8",
+    "dotenv": "^17.4.2",
+    "electron-store": "^8.2.0",
+    "ffmpeg-static": "^5.3.0",
+    "lucide-react": "^0.400.0",
+    "nodemailer": "^9.0.3"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^31.7.6",
+    "electron-builder": "^24.13.3",
+    "electron-vite": "^2.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^5.4.11"
+  },
+  "build": {
+    "appId": "com.codespire.notetaker",
+    "productName": "Codespire Notetaker",
+    "directories": { "output": "release", "buildResources": "build" },
+    "asarUnpack": ["**/node_modules/ffmpeg-static/**"],
+    "files": ["out/**/*", "package.json", "build/icon.png", "build/icon.ico"],
+    "win": { "target": "nsis", "icon": "build/icon.ico" },
+    "mac": { "target": "dmg", "icon": "build/icon.png" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
+  }
+}

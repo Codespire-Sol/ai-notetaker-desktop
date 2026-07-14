@@ -1,0 +1,112 @@
+name: Build Desktop App
+
+# ---------------------------------------------------------------------------
+# Codespire Notetaker — desktop build & release pipeline.
+#
+# The Electron app lives at the repository ROOT (src/main, src/preload,
+# src/renderer). electron-vite builds the app; electron-builder packages the
+# installers using the `build` config in package.json.
+#
+# Trigger: pushing a version tag like v1.0.0 builds and publishes installers to
+# a GitHub Release. Also runnable manually from the Actions tab.
+# ---------------------------------------------------------------------------
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+# electron-builder needs to create the GitHub Release and upload assets.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Build each OS natively — a Windows .exe must be built on Windows and a
+      # macOS .dmg on macOS. Do not cross-compile.
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Compile main / preload / renderer with electron-vite into out/.
+      - name: Build app
+        run: npm run build
+
+      # Package + publish the installer for this OS. `--publish always` uploads
+      # to the GitHub Release. electron-builder reads the `build` block in
+      # package.json (appId, icons, nsis, and the asarUnpack for ffmpeg-static,
+      # which MUST stay unpacked so the bundled ffmpeg binary is executable).
+      - name: Package & publish
+        run: npx electron-builder --publish always
+        env:
+          # Auto-provided; the job has `contents: write` above, so no manual
+          # secret setup is required.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+          # Build UNSIGNED. Do NOT wire empty CSC_LINK/WIN_CSC_LINK env vars from
+          # unset secrets — electron-builder treats an empty CSC_LINK as a
+          # certificate FILE PATH and fails. Disabling identity auto-discovery
+          # makes the macOS build produce an unsigned app cleanly. Users get an
+          # OS "unidentified developer" warning until signing is added.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+          # -----------------------------------------------------------------
+          # TO ENABLE SIGNED / NOTARIZED installers later:
+          #   1. Add the secrets under Settings > Secrets and variables > Actions.
+          #   2. Remove the CSC_IDENTITY_AUTO_DISCOVERY line above.
+          #   3. Uncomment the matching lines below.
+          #
+          # Windows Authenticode:
+          #   WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          #   WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          # macOS Developer ID:
+          #   CSC_LINK: ${{ secrets.CSC_LINK }}
+          #   CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # macOS notarization (all three required):
+          #   APPLE_ID: ${{ secrets.APPLE_ID }}
+          #   APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          #   APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # -----------------------------------------------------------------
+
+      # Also upload the installers as workflow artifacts for inspection.
+      - name: Upload installers as artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codespire-notetaker-${{ matrix.os }}
+          path: |
+            release/*.exe
+            release/*.dmg
+          if-no-files-found: ignore
+
+# ---------------------------------------------------------------------------
+# HOW TO CUT A RELEASE
+#   1. Bump "version" in package.json (e.g. 1.0.0).
+#   2. git tag v1.0.0 && git push origin v1.0.0
+#   3. This workflow builds Windows + macOS and publishes both installers to the
+#      GitHub Release for that tag.
+#
+# REPOSITORY SECRETS (all optional — with none set, an unsigned build publishes
+# successfully):
+#   WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD          Windows code signing
+#   CSC_LINK / CSC_KEY_PASSWORD                  macOS code signing
+#   APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID   macOS notarization
+#
+#   GH_TOKEN is provided automatically as secrets.GITHUB_TOKEN.
+# ---------------------------------------------------------------------------
