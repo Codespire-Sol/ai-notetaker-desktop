@@ -48,6 +48,14 @@ jobs:
       - name: Build app
         run: npm run build
 
+      # macOS only: compile the Swift/ScreenCaptureKit helper that captures system
+      # audio (macOS blocks the loopback capture Windows uses). Produces a universal
+      # binary at mac/build/SystemAudioCapture, bundled into the .dmg via the
+      # `extraResources` entry in package.json.
+      - name: Build macOS system-audio helper (ScreenCaptureKit)
+        if: matrix.os == 'macos-latest'
+        run: bash mac/build.sh
+
       # Package + publish the installer for this OS. `--publish always` uploads
       # to the GitHub Release. electron-builder reads the `build` block in
       # package.json (appId, icons, nsis, and the asarUnpack for ffmpeg-static,

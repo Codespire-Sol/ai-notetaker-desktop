@@ -35,7 +35,17 @@
     "asarUnpack": ["**/node_modules/ffmpeg-static/**"],
     "files": ["out/**/*", "package.json", "build/icon.png", "build/icon.ico"],
     "win": { "target": "nsis", "icon": "build/icon.ico" },
-    "mac": { "target": "dmg", "icon": "build/icon.png" },
+    "mac": {
+      "target": "dmg",
+      "icon": "build/icon.png",
+      "extraResources": [
+        { "from": "mac/build/SystemAudioCapture", "to": "SystemAudioCapture" }
+      ],
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Codespire Notetaker records your voice so your meeting can be transcribed.",
+        "NSScreenCaptureDescription": "Codespire Notetaker captures system audio so the other participants in your meeting are recorded."
+      }
+    },
     "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
   }
 }

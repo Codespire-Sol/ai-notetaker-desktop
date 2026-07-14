@@ -105,35 +105,55 @@ export function createRecorder() {
     chunks = []
     systemAudio = false
 
-    // 1) Try to capture SYSTEM audio via getDisplayMedia. In Electron on Windows
-    //    (with the main-process handler returning audio: 'loopback') this yields
-    //    the system/loopback audio. We must request video too (loopback audio is
-    //    only offered alongside a screen video track), then immediately drop it.
-    try {
-      displayStream = await navigator.mediaDevices.getDisplayMedia({
-        audio: true,
-        video: true
-      })
+    const isMac = window.api?.platform === 'darwin'
 
-      // Immediately stop + remove the video track — we only want the audio.
-      for (const vt of displayStream.getVideoTracks()) {
-        vt.stop()
-        displayStream.removeTrack(vt)
+    if (isMac) {
+      // macOS blocks loopback via getDisplayMedia. Instead the MAIN process runs a
+      // Swift/ScreenCaptureKit helper that captures system audio to a WAV; it is
+      // mixed with this mic recording when the file is saved. Here we record mic only.
+      try {
+        const res = await window.api.startSystemAudio()
+        systemAudio = !!res?.ok
+        if (!res?.ok) {
+          // eslint-disable-next-line no-console
+          console.warn('[recorder] macOS system audio unavailable:', res?.reason)
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[recorder] macOS system-audio helper failed:', err)
+        systemAudio = false
       }
+    } else {
+      // 1) Windows/Linux: capture SYSTEM audio via getDisplayMedia. In Electron on
+      //    Windows (with the main-process handler returning audio: 'loopback') this
+      //    yields the system/loopback audio. We must request video too (loopback audio
+      //    is only offered alongside a screen video track), then immediately drop it.
+      try {
+        displayStream = await navigator.mediaDevices.getDisplayMedia({
+          audio: true,
+          video: true
+        })
 
-      if (displayStream.getAudioTracks().length > 0) {
-        systemAudio = true
-      } else {
-        // Got a stream but no audio track (loopback unavailable) — discard it.
-        stopStream(displayStream)
+        // Immediately stop + remove the video track — we only want the audio.
+        for (const vt of displayStream.getVideoTracks()) {
+          vt.stop()
+          displayStream.removeTrack(vt)
+        }
+
+        if (displayStream.getAudioTracks().length > 0) {
+          systemAudio = true
+        } else {
+          // Got a stream but no audio track (loopback unavailable) — discard it.
+          stopStream(displayStream)
+          displayStream = null
+        }
+      } catch (err) {
+        // User cancelled the picker, or loopback is unsupported — fall back to mic only.
+        // eslint-disable-next-line no-console
+        console.warn('[recorder] getDisplayMedia failed, falling back to mic only:', err)
         displayStream = null
+        systemAudio = false
       }
-    } catch (err) {
-      // User cancelled the picker, or loopback is unsupported — fall back to mic only.
-      // eslint-disable-next-line no-console
-      console.warn('[recorder] getDisplayMedia failed, falling back to mic only:', err)
-      displayStream = null
-      systemAudio = false
     }
 
     // 2) Capture the MICROPHONE. This is required — if it fails we clean up and throw.

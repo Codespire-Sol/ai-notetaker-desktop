@@ -5,6 +5,7 @@ node_modules/
 out/
 dist/
 release/
+mac/build/
 
 # Secrets / local environment — NEVER commit real keys.
 # (.env.example is committed as a template; the real .env is not.)

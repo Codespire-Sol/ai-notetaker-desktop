@@ -13,6 +13,7 @@ import { sendMeetingNotes, verifySmtp } from './services/email.js'
 import { listMeetings, getMeeting, addMeeting, updateMeeting, deleteMeeting } from './services/store-meetings.js'
 import { logUsage, getUsageStats } from './services/usage.js'
 import { startMeetingDetector } from './services/detector.js'
+import { isMac, startSystemAudio, stopSystemAudio } from './services/mac-audio.js'
 
 // ── Persistent settings store ─────────────────────────────────────────────
 const store = new Store({
@@ -127,11 +128,45 @@ ipcMain.handle('ai:transcribe', (_e, { audioPath, language = '' } = {}) =>
 ipcMain.handle('ai:summarize', (_e, { transcript, meetingTitle = 'Meeting', language = 'auto' } = {}) =>
   summarize({ transcript, openaiKey: publicSettings().openaiKey, model: store.get('summarizeModel'), meetingTitle, language }))
 
+// ── macOS system audio (ScreenCaptureKit helper) ────────────────────────────
+// Windows gets system audio in the renderer via loopback; macOS can't, so the
+// Swift helper captures it here and we mix it with the mic on save.
+ipcMain.handle('macaudio:start', () => startSystemAudio())
+
+/** Mix the mic recording with the macOS system-audio WAV into one file. */
+function mixWithSystemAudio(micPath, sysPath) {
+  return new Promise((resolve) => {
+    if (!ffmpegPath || !fs.existsSync(sysPath)) return resolve(micPath)
+    const out = micPath.replace(/\.webm$/i, '-mixed.webm')
+    const args = [
+      '-i', micPath, '-i', sysPath,
+      '-filter_complex', '[0:a][1:a]amix=inputs=2:duration=longest:dropout_transition=0[a]',
+      '-map', '[a]', '-c:a', 'libopus', '-b:a', '96k', '-y', out,
+    ]
+    const p = spawn(ffmpegPath, args, { windowsHide: true })
+    p.on('close', (code) => {
+      if (code === 0 && fs.existsSync(out)) {
+        try { fs.unlinkSync(micPath); fs.unlinkSync(sysPath) } catch {}
+        resolve(out)
+      } else resolve(micPath)   // mixing failed — keep the mic-only recording
+    })
+    p.on('error', () => resolve(micPath))
+  })
+}
+
 // ── Recorder: persist the recorded audio to disk ────────────────────────────
 ipcMain.handle('recorder:save', async (_e, { arrayBuffer, mimeType, durationMs }) => {
   const ext = (mimeType || '').includes('webm') ? 'webm' : 'bin'
-  const filePath = join(recordingsDir(), `meeting-${Date.now()}.${ext}`)
+  let filePath = join(recordingsDir(), `meeting-${Date.now()}.${ext}`)
   fs.writeFileSync(filePath, Buffer.from(arrayBuffer))
+
+  // On macOS the renderer only captured the mic — stop the ScreenCaptureKit helper
+  // and mix its system audio in, so the recording has both sides of the meeting.
+  if (isMac()) {
+    const sysPath = await stopSystemAudio()
+    if (sysPath) filePath = await mixWithSystemAudio(filePath, sysPath)
+  }
+
   return { filePath, durationMs }
 })
 

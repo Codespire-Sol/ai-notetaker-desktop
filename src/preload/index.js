@@ -1,6 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
 const api = {
+  // Platform ('darwin' | 'win32' | 'linux') — the recorder branches on this.
+  platform: process.platform,
+
+  // macOS: start the ScreenCaptureKit system-audio helper (Windows uses loopback instead)
+  startSystemAudio: () => ipcRenderer.invoke('macaudio:start'),
+
   // Settings
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (data) => ipcRenderer.invoke('settings:save', data),
