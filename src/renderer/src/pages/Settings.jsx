@@ -4,7 +4,7 @@ import { KeyRound, Mail, Lock as LockIcon, Save, Video, Loader2, CheckCircle2, P
 const empty = {
   openaiKey: '', sarvamKey: '', msClientId: '',
   smtp: { host: '', port: 587, secure: false, user: '', pass: '', from: '' },
-  summarizeModel: 'gpt-4o-mini', sttModel: 'saarika:v2.5', autoRecord: false
+  summarizeModel: 'gpt-4o-mini', sttModel: 'saarika:v2.5', autoRecord: false, autoEmail: false
 }
 
 // Password input with a show/hide eye toggle
@@ -52,6 +52,12 @@ export default function Settings() {
     up('autoRecord', next)
     await window.api.saveSettings({ autoRecord: next })
     flash(next ? 'Auto-record enabled' : 'Auto-record disabled')
+  }
+  const toggleAutoEmail = async () => {
+    const next = !s.autoEmail
+    up('autoEmail', next)
+    await window.api.saveSettings({ autoEmail: next })
+    flash(next ? 'Notes will be emailed automatically' : 'Auto-email disabled')
   }
   const testSmtp = async () => {
     setSmtpBusy(true)
@@ -181,6 +187,21 @@ export default function Settings() {
         <button className="btn secondary" style={{ marginTop: 14 }} onClick={testSmtp} disabled={smtpBusy}>
           {smtpBusy ? <><Loader2 size={15} className="spin" /> Testing…</> : <><PlugZap size={15} /> Test connection</>}
         </button>
+
+        {/* Auto-email notes after a meeting */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>Email notes automatically</div>
+            <div className="hint" style={{ marginTop: 2 }}>
+              {s.autoEmail
+                ? 'After each meeting, notes are emailed to its attendees automatically.'
+                : 'Off — you’ll send the notes yourself from the meeting page.'}
+            </div>
+          </div>
+          <button className="btn ghost" onClick={toggleAutoEmail} style={{ padding: 4 }}>
+            {s.autoEmail ? <ToggleRight size={30} color="var(--brand)" /> : <ToggleLeft size={30} color="var(--muted)" />}
+          </button>
+        </div>
       </div>
 
       {/* PIN */}

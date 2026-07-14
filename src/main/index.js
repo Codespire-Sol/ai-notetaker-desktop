@@ -23,6 +23,7 @@ const store = new Store({
     smtp: { host: '', port: 587, secure: false, user: '', pass: '', from: '' },
     summarizeModel: 'gpt-4o-mini', sttModel: 'saarika:v2.5',
     autoRecord: false,   // auto-start recording when a meeting/call is detected
+    autoEmail: false,    // auto-email the notes to attendees once a meeting is processed
     meetingLangs: {},    // per-calendar-meeting language preference { [meetingId]: 'en' | 'hi' | ... }
     pinHash: '', pinEnabled: false
   }
@@ -94,7 +95,8 @@ function publicSettings() {
     },
     summarizeModel: store.get('summarizeModel'),
     sttModel: store.get('sttModel'),
-    autoRecord: !!store.get('autoRecord')
+    autoRecord: !!store.get('autoRecord'),
+    autoEmail: !!store.get('autoEmail')
   }
 }
 
@@ -107,6 +109,7 @@ ipcMain.handle('settings:save', (_e, data) => {
   if (data.summarizeModel) store.set('summarizeModel', data.summarizeModel)
   if (data.sttModel) store.set('sttModel', data.sttModel)
   if (data.autoRecord !== undefined) store.set('autoRecord', !!data.autoRecord)
+  if (data.autoEmail !== undefined) store.set('autoEmail', !!data.autoEmail)
   return publicSettings()
 })
 
@@ -171,6 +174,15 @@ ipcMain.handle('recorder:save', async (_e, { arrayBuffer, mimeType, durationMs }
 })
 
 // ── Full pipeline: audioPath → transcribe → summarize → store meeting ───────
+// Microsoft masks attendee addresses on PERSONAL accounts as
+// outlook_<hash>@outlook.com. Those aren't deliverable, so never try to email them
+// (work/school accounts return the real addresses and pass straight through).
+function deliverableEmails(list) {
+  return (list || []).filter(
+    (e) => e && e.includes('@') && !/^outlook_[0-9a-f]+@outlook\.com$/i.test(e.trim())
+  )
+}
+
 // Find the calendar meeting happening right now (for auto-labeling a recording).
 async function matchCurrentMeeting() {
   try {
@@ -217,6 +229,33 @@ ipcMain.handle('meeting:process', async (_e, { audioPath, title, language = '', 
   logUsage({ operation: 'summarize', provider: 'openai', model: s.model || store.get('summarizeModel'),
     meetingId: meeting.id, meetingTitle: meeting.title,
     inputTokens: s.usage?.inputTokens || 0, outputTokens: s.usage?.outputTokens || 0 })
+
+  // Auto-email the notes to the meeting's attendees, if enabled.
+  if (store.get('autoEmail')) {
+    const to = deliverableEmails(finalAttendees)
+    const smtp = publicSettings().smtp
+    if (to.length && smtp.host && smtp.user) {
+      try {
+        // same "smart attach" rule as the manual send: audio only if it won't bounce
+        let audioPath = ''
+        let p = meeting.audioPath
+        if (p && /\.webm$/i.test(p)) p = await ensureSeekableMp3(p)
+        if (p && fs.existsSync(p) && fs.statSync(p).size / (1024 * 1024) <= MAX_AUDIO_EMAIL_MB) audioPath = p
+
+        await sendMeetingNotes({
+          smtp, to, meetingTitle: finalTitle, summary: s.summary,
+          actionItems: s.action_items, keyDecisions: s.key_decisions,
+          transcriptText: t.full_text, audioPath,
+        })
+        updateMeeting(meeting.id, { emailedTo: to })
+        meeting.emailedTo = to
+      } catch {
+        // Never fail the recording because the email didn't go out — the user can
+        // still send it manually from the meeting page.
+      }
+    }
+  }
+
   return meeting
 })
 
