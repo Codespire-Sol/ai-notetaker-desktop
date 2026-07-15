@@ -1,11 +1,17 @@
-// Meeting detector (Windows) — detects when a call is active by checking which
-// app is CURRENTLY using the microphone. Windows records per-app mic usage under
-// CapabilityAccessManager; while an app is actively using the mic its
-// `LastUsedTimeStop` value is 0. We poll for that.
+// Meeting detector — detects when a call is active by checking which app is
+// CURRENTLY using the microphone, then auto-starts / auto-stops recording.
 //
-// This lets us auto-start recording when a Teams/Zoom/Meet call begins, without
-// any webhook or being able to see "inside" Teams.
+//   Windows : per-app mic usage under CapabilityAccessManager; while an app is
+//             actively using the mic its `LastUsedTimeStop` value is 0.
+//   macOS   : per-app mic usage via the MicProbe Core Audio helper (see
+//             detector-mac.js); global-boolean fallback on macOS < 14.
+//   other   : no-op (never reports a call).
+//
+// Both real platforms report PER-APP usage and exclude our own recorder, so the
+// detector keeps polling during our recording and still sees the CALL END →
+// auto-stop, without a webhook or seeing "inside" Teams.
 import { spawn } from 'child_process'
+import { isCallActiveMac } from './detector-mac.js'
 
 const MIC_KEYS = [
   'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\microphone',
@@ -42,7 +48,7 @@ function parseActiveApps(out) {
   return apps
 }
 
-async function isCallActive() {
+async function isCallActiveWin() {
   for (const key of MIC_KEYS) {
     const apps = parseActiveApps(await regQuery(key))
     if (apps.length) {
@@ -51,6 +57,13 @@ async function isCallActive() {
       return { active: true, app: conf || apps[0] }
     }
   }
+  return { active: false, app: null }
+}
+
+// Dispatch to the right per-platform check. Same {active, app} shape everywhere.
+async function isCallActive() {
+  if (process.platform === 'win32') return isCallActiveWin()
+  if (process.platform === 'darwin') return isCallActiveMac()
   return { active: false, app: null }
 }
 

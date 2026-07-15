@@ -1,6 +1,6 @@
 {
   "name": "codespire-notetaker",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Codespire Notetaker — local meeting recorder with AI transcription & summaries",
   "author": "Codespire Solutions",
   "main": "./out/main/index.js",
@@ -60,10 +60,16 @@
     "mac": {
       "target": "dmg",
       "icon": "build/icon.png",
+      "identity": null,
+      "gatekeeperAssess": false,
       "extraResources": [
         {
           "from": "mac/build/SystemAudioCapture",
           "to": "SystemAudioCapture"
+        },
+        {
+          "from": "mac/build/MicProbe",
+          "to": "MicProbe"
         }
       ],
       "extendInfo": {
