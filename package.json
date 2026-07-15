@@ -1,6 +1,6 @@
 {
   "name": "codespire-notetaker",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Codespire Notetaker — local meeting recorder with AI transcription & summaries",
   "author": "Codespire Solutions",
   "main": "./out/main/index.js",
@@ -39,6 +39,7 @@
     "asarUnpack": [
       "**/node_modules/ffmpeg-static/**"
     ],
+    "afterPack": "build/afterPack.cjs",
     "publish": [
       {
         "provider": "github",
