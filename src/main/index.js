@@ -353,6 +353,18 @@ ipcMain.handle('email:send', async (_e, payload) => {
 ipcMain.handle('email:verify', (_e, smtp) => verifySmtp(smtp || publicSettings().smtp))
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
+// Single instance: a second launch (double-clicking the app while it's already
+// running in the tray) should focus the existing window, not start a duplicate
+// that fights over the same settings store and mic.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) { mainWindow.show(); mainWindow.focus() }
+    else createWindow()
+  })
+}
+
 app.whenReady().then(() => {
   // System-audio capture: grant a screen source + Windows loopback audio.
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
@@ -386,7 +398,18 @@ app.whenReady().then(() => {
     onStop: () => mainWindow?.webContents?.send('detector:call-ended'),
   })
 
-  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
+  app.on('activate', () => {
+    // Closing only HIDES the window (see the 'close' handler), so on reactivate we
+    // must re-show it — not just create one when none exist. Otherwise clicking the
+    // Dock/app icon does nothing and the app appears frozen.
+    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    else { mainWindow?.show(); mainWindow?.focus() }
+  })
 })
+
+// Cmd+Q and Dock → Quit must actually terminate. They don't go through the tray's
+// "Quit", so set the flag the 'close' handler checks — otherwise the window just
+// hides again and the app can never be quit normally.
+app.on('before-quit', () => { app.isQuitting = true })
 
 app.on('window-all-closed', () => { /* stay in tray */ })
