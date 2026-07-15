@@ -23,11 +23,21 @@ import http from 'node:http'
 import { shell } from 'electron'
 
 // ── Constants ────────────────────────────────────────────────────────────────
-// 'consumers' = personal Microsoft accounts (outlook.com/hotmail/live).
-// Use 'common' for work/school (org) accounts, or 'organizations' for org-only.
-const TENANT = 'consumers'
-const AUTHORIZE_URL = `https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/authorize`
-const TOKEN_URL = `https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/token`
+// Which Microsoft accounts the sign-in page accepts. This MUST match the
+// "Supported account types" chosen on the user's OWN Azure app registration:
+//   personal → 'consumers'     (outlook.com / hotmail / live personal accounts)
+//   work     → 'organizations' (work / school / Microsoft 365 org accounts)
+//   both     → 'common'        (either)
+// The user picks this in Settings; the resolved tenant is threaded through the
+// whole OAuth flow (authorize → token exchange → later refreshes) and stored
+// with the tokens so refreshes keep using the same endpoint.
+export function tenantForAccountType(accountType) {
+  if (accountType === 'work') return 'organizations'
+  if (accountType === 'both') return 'common'
+  return 'consumers' // personal (default)
+}
+const authorizeUrl = (tenant) => `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`
+const tokenUrl = (tenant) => `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0'
 
 // Fixed loopback redirect. This exact value must be registered as a
@@ -77,7 +87,7 @@ function resultPage(title, message) {
 // ─────────────────────────────────────────────────────────────────────────────
 // 1) connectTeams
 // ─────────────────────────────────────────────────────────────────────────────
-export async function connectTeams({ clientId, store }) {
+export async function connectTeams({ clientId, store, accountType }) {
   if (!clientId || !String(clientId).trim()) {
     throw new Error('Microsoft Client ID not configured')
   }
@@ -85,6 +95,7 @@ export async function connectTeams({ clientId, store }) {
     throw new Error('A persistent store instance is required to connect Teams')
   }
 
+  const tenant = tenantForAccountType(accountType)
   const { verifier, challenge } = generatePkce()
   // Opaque state value to defend against CSRF on the loopback callback.
   const state = base64url(crypto.randomBytes(16))
@@ -161,7 +172,7 @@ export async function connectTeams({ clientId, store }) {
 
     server.listen(REDIRECT_PORT, '127.0.0.1', () => {
       const authUrl =
-        `${AUTHORIZE_URL}?` +
+        `${authorizeUrl(tenant)}?` +
         new URLSearchParams({
           client_id: clientId,
           response_type: 'code',
@@ -185,7 +196,7 @@ export async function connectTeams({ clientId, store }) {
   })
 
   // Exchange the authorization code for tokens (PKCE — no client secret).
-  const tokenSet = await exchangeCode({ clientId, code, codeVerifier: verifier })
+  const tokenSet = await exchangeCode({ clientId, code, codeVerifier: verifier, tenant })
 
   // Resolve the account email from Graph so status can display it.
   let email = null
@@ -197,7 +208,7 @@ export async function connectTeams({ clientId, store }) {
     email = null
   }
 
-  persistTokens(store, tokenSet, email)
+  persistTokens(store, tokenSet, email, tenant)
 
   return { ok: true, email }
 }
@@ -272,7 +283,7 @@ export async function getUpcomingMeetings({ store, clientId, lookbackMinutes = 0
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Exchange an authorization code for a token set (PKCE public client). */
-async function exchangeCode({ clientId, code, codeVerifier }) {
+async function exchangeCode({ clientId, code, codeVerifier, tenant }) {
   const body = new URLSearchParams({
     client_id: clientId,
     grant_type: 'authorization_code',
@@ -281,25 +292,25 @@ async function exchangeCode({ clientId, code, codeVerifier }) {
     code_verifier: codeVerifier,
     scope: SCOPES
   })
-  return postToken(body, 'Failed to exchange authorization code')
+  return postToken(tokenUrl(tenant), body, 'Failed to exchange authorization code')
 }
 
 /** Redeem a refresh token for a fresh access token (PKCE public client). */
-async function refreshAccessToken({ clientId, refreshToken }) {
+async function refreshAccessToken({ clientId, refreshToken, tenant }) {
   const body = new URLSearchParams({
     client_id: clientId,
     grant_type: 'refresh_token',
     refresh_token: refreshToken,
     scope: SCOPES
   })
-  return postToken(body, 'Failed to refresh Microsoft access token')
+  return postToken(tokenUrl(tenant), body, 'Failed to refresh Microsoft access token')
 }
 
 /** POST to the token endpoint and normalize errors. */
-async function postToken(body, failMessage) {
+async function postToken(url, body, failMessage) {
   let res
   try {
-    res = await fetch(TOKEN_URL, {
+    res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body
@@ -324,7 +335,7 @@ async function postToken(body, failMessage) {
 }
 
 /** Build a persisted token record and save it under STORE_KEY. */
-function persistTokens(store, tokenSet, emailFallback) {
+function persistTokens(store, tokenSet, emailFallback, tenant) {
   const existing = store.get(STORE_KEY) || {}
   const expiresAt = Date.now() + (Number(tokenSet.expires_in) || 3600) * 1000
 
@@ -333,7 +344,9 @@ function persistTokens(store, tokenSet, emailFallback) {
     // Microsoft rotates refresh tokens; keep the previous one if none returned.
     refresh_token: tokenSet.refresh_token || existing.refresh_token || null,
     expires_at: expiresAt,
-    email: emailFallback || existing.email || null
+    email: emailFallback || existing.email || null,
+    // Remember which tenant we authed against so refreshes hit the same endpoint.
+    tenant: tenant || existing.tenant || 'consumers'
   })
 }
 
@@ -359,8 +372,9 @@ async function ensureValidToken({ store, clientId }) {
     throw new Error('Microsoft Client ID not configured')
   }
 
-  const refreshed = await refreshAccessToken({ clientId, refreshToken: tokens.refresh_token })
-  persistTokens(store, refreshed, tokens.email)
+  const tenant = tokens.tenant || 'consumers'
+  const refreshed = await refreshAccessToken({ clientId, refreshToken: tokens.refresh_token, tenant })
+  persistTokens(store, refreshed, tokens.email, tenant)
   return refreshed.access_token
 }
 

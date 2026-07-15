@@ -21,6 +21,7 @@ const store = new Store({
   name: 'codespire-notetaker',
   defaults: {
     openaiKey: '', sarvamKey: '', msClientId: '',
+    msAccountType: 'personal',   // which MS accounts Teams sign-in accepts: personal | work | both
     smtp: { host: '', port: 587, secure: false, user: '', pass: '', from: '' },
     summarizeModel: 'gpt-4o-mini', sttModel: 'saarika:v2.5',
     autoRecord: false,   // auto-start recording when a meeting/call is detected
@@ -34,6 +35,7 @@ let appIsRecording = false   // set by the renderer so the detector doesn't self
 
 const envDefault = (k, fallback) => (process.env[k] && process.env[k].length ? process.env[k] : fallback)
 const msClientId = () => envDefault('MS_CLIENT_ID', store.get('msClientId'))
+const msAccountType = () => envDefault('MS_ACCOUNT_TYPE', store.get('msAccountType')) || 'personal'
 
 let mainWindow = null
 let tray = null
@@ -86,6 +88,7 @@ function publicSettings() {
     openaiKey: envDefault('OPENAI_API_KEY', store.get('openaiKey')),
     sarvamKey: envDefault('SARVAM_API_KEY', store.get('sarvamKey')),
     msClientId: msClientId(),
+    msAccountType: msAccountType(),
     smtp: {
       host: envDefault('SMTP_HOST', store.get('smtp.host')),
       port: Number(envDefault('SMTP_PORT', store.get('smtp.port'))),
@@ -106,6 +109,7 @@ ipcMain.handle('settings:save', (_e, data) => {
   if (data.openaiKey !== undefined) store.set('openaiKey', data.openaiKey)
   if (data.sarvamKey !== undefined) store.set('sarvamKey', data.sarvamKey)
   if (data.msClientId !== undefined) store.set('msClientId', data.msClientId)
+  if (data.msAccountType !== undefined) store.set('msAccountType', data.msAccountType)
   if (data.smtp) store.set('smtp', { ...store.get('smtp'), ...data.smtp })
   if (data.summarizeModel) store.set('summarizeModel', data.summarizeModel)
   if (data.sttModel) store.set('sttModel', data.sttModel)
@@ -304,7 +308,7 @@ ipcMain.handle('meeting:getAudio', async (_e, id) => {
 
 // ── Teams ─────────────────────────────────────────────────────────────────────
 ipcMain.handle('teams:connect', async () => {
-  try { return await connectTeams({ clientId: msClientId(), store }) }
+  try { return await connectTeams({ clientId: msClientId(), store, accountType: msAccountType() }) }
   catch (e) { return { ok: false, error: e.message } }
 })
 ipcMain.handle('teams:status', () => getTeamsStatus({ store }))

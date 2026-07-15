@@ -3,18 +3,20 @@
 # Install Codespire Notetaker on macOS
 
 > **Read this first.**
-> **Windows is the fully-supported platform today.** On macOS the app installs,
-> records your **microphone**, transcribes, summarizes and emails notes exactly as
-> it does on Windows — but capturing **system audio** (the other participants'
-> voices) needs **extra setup**, because macOS does not let apps record system
-> output on their own. Details in the [System audio](#system-audio-on-macos) section
-> below.
+> **Windows and macOS are both fully supported.** The app records your
+> **microphone** *and* the **other participants' audio**, transcribes, summarizes
+> and emails notes on both platforms. On macOS, system-audio capture uses Apple's
+> **ScreenCaptureKit** and needs only the one-time **Screen Recording** permission
+> (Step 4) — no BlackHole, no virtual audio device, no admin password. See
+> [System audio](#system-audio-on-macos) for the details and version requirements.
 
 ---
 
 ## Before you start
 
-- **macOS 11 (Big Sur) or later**, Apple Silicon or Intel.
+- **macOS 13 (Ventura) or later**, Apple Silicon. (System-audio capture needs
+  macOS 13+; automatic meeting **stop** detection needs macOS 14+ — see below.
+  Intel builds are not published yet.)
 - An **OpenAI API key** and a **Sarvam API key** — see
   [CONFIGURATION.md](CONFIGURATION.md).
 
@@ -37,21 +39,26 @@ ending in **`.dmg`**, named something like `Codespire Notetaker-1.0.0.dmg`.
 
 ## Step 3 — Open it the first time
 
-The app is **not signed or notarized** by Apple, so a normal double-click gets
-you *"Codespire Notetaker cannot be opened because it is from an unidentified
-developer."*
+The app is **ad-hoc signed but not notarized** by Apple, so macOS quarantines it
+on download. A normal double-click shows *"Codespire Notetaker is damaged and
+can't be opened"* or *"...from an unidentified developer."* **This is expected —
+the app is fine; macOS just doesn't recognise the signer.**
 
-Do this instead, **once**:
+**Clear the quarantine flag once.** Open **Terminal** (Applications → Utilities →
+Terminal), paste this line, and press Return:
 
-1. Open **Applications** in Finder.
-2. **Right-click** (or Control-click) **Codespire Notetaker** → **Open**.
-3. In the dialog, click **Open** again.
+```bash
+xattr -dr com.apple.quarantine "/Applications/Codespire Notetaker.app"
+```
 
-macOS remembers your choice. From then on it opens normally.
+Then open **Codespire Notetaker** from Applications as normal. You only ever do
+this once, right after installing (and again after each update you download by
+hand).
 
-> Still blocked? Go to **System Settings → Privacy & Security**, scroll to the
-> **Security** section, and click **Open Anyway** next to the message about
-> Codespire Notetaker.
+> **Prefer not to use Terminal?** Right-click (or Control-click) **Codespire
+> Notetaker** in Applications → **Open** → **Open** again. If that still says
+> **"damaged,"** the Terminal command above is the reliable fix on Apple Silicon —
+> the right-click trick often does not clear the "damaged" state.
 
 ---
 
@@ -62,7 +69,7 @@ macOS asks for permission the first time the app needs something. Say yes to bot
 | Permission | Why it's needed |
 |------------|-----------------|
 | **Microphone** | Records your voice, and tells the app when a call starts and ends. **Required.** |
-| **Screen Recording** | macOS puts audio capture behind the screen-recording permission. Needed for any attempt at capturing what you hear. |
+| **Screen Recording** | macOS puts system-audio capture behind this permission. **Required** to record the other participants (via ScreenCaptureKit). |
 
 To check or fix them later:
 **System Settings → Privacy & Security → Microphone** and
@@ -76,27 +83,21 @@ To check or fix them later:
 
 ## System audio on macOS
 
-Here is the honest picture.
+Codespire Notetaker captures **both sides** of your meeting on macOS — no extra
+software required:
 
-macOS has no built-in equivalent of the Windows "loopback" capture the app relies
-on. Apple deliberately blocks apps from recording other apps' audio output. So:
+- **Your microphone** — your voice.
+- **System audio** (the other participants) — captured with Apple's
+  **ScreenCaptureKit**, the same free framework the built-in Screen Recording
+  uses. **No BlackHole, no virtual audio device, no admin password.**
 
-- **Your microphone always works.** Your side of every meeting is recorded,
-  transcribed and summarized normally.
-- **The other participants may not be captured**, because their audio comes out of
-  your speakers/headset — which macOS won't let the app read directly. When this
-  happens you'll see **"Mic only — system audio unavailable"** during recording,
-  and the transcript will contain only your half of the conversation.
+The only requirement is the **Screen Recording** permission (Step 4) — macOS puts
+system-audio capture behind it. Grant it once, quit and reopen the app, and every
+participant is recorded, transcribed and summarised.
 
-**The workaround** is a **virtual audio device** — a small system extension
-(BlackHole, Loopback, and similar tools) that creates a fake audio output the app
-*can* record from. You route the meeting's sound through it, and the app captures
-both sides. Setting this up means installing third-party software and
-reconfiguring your Mac's audio routing; it is outside the scope of this guide and
-we don't ship or endorse a specific tool.
-
-**If both sides of the conversation matter to you, use the Windows build.** It
-captures system audio with no setup at all.
+> **Version note:** system-audio capture needs **macOS 13 (Ventura) or later**. On
+> older macOS the app records your microphone only and shows **"Mic only — system
+> audio unavailable."**
 
 ---
 
@@ -133,14 +134,16 @@ The microphone permission is missing. **System Settings → Privacy & Security �
 Microphone** → enable **Codespire Notetaker**, then restart the app.
 
 **"Mic only — system audio unavailable"**
-Expected on macOS without a virtual audio device — see
-[System audio on macOS](#system-audio-on-macos). Your own voice is still recorded
-and the notes are still generated.
+The **Screen Recording** permission is missing, or you're on macOS 12 or earlier.
+Grant **System Settings → Privacy & Security → Screen Recording → Codespire
+Notetaker**, then **quit and reopen** the app. Your own voice is recorded and the
+notes are generated either way.
 
 **Meeting detection doesn't fire**
-The automatic "meeting detected" behaviour relies on Windows' microphone-activity
-tracking and does **not** work on macOS. Start recordings manually from
-**New Recording**.
+On **macOS 14 (Sonoma) or later** the app auto-detects when a call starts *and*
+stops, like Windows. On **macOS 13** it can auto-start when it sees the mic in use
+but cannot auto-stop reliably — press **Stop** yourself when the call ends. You can
+always start a recording by hand from **New Recording**.
 
 ---
 

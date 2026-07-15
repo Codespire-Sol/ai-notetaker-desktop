@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { KeyRound, Mail, Lock as LockIcon, Save, Video, Loader2, CheckCircle2, PlugZap, Eye, EyeOff, Radio, ToggleLeft, ToggleRight } from 'lucide-react'
 
 const empty = {
-  openaiKey: '', sarvamKey: '', msClientId: '',
+  openaiKey: '', sarvamKey: '', msClientId: '', msAccountType: 'personal',
   smtp: { host: '', port: 587, secure: false, user: '', pass: '', from: '' },
   summarizeModel: 'gpt-4o-mini', sttModel: 'saarika:v2.5', autoRecord: false, autoEmail: false
 }
@@ -134,6 +134,22 @@ export default function Settings() {
         <div className="field">
           <label>Microsoft Client ID <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(Azure app registration)</span></label>
           <input value={s.msClientId} onChange={(e) => up('msClientId', e.target.value)} placeholder="00000000-0000-0000-0000-000000000000" />
+        </div>
+        <div className="field">
+          <label>Account type</label>
+          <select
+            value={s.msAccountType || 'personal'}
+            onChange={(e) => up('msAccountType', e.target.value)}
+            disabled={teams.connected}
+          >
+            <option value="personal">Personal — outlook.com, hotmail, live</option>
+            <option value="work">Work / school — Microsoft 365 organisation</option>
+            <option value="both">Both</option>
+          </select>
+          <p className="hint" style={{ marginTop: 6 }}>
+            Must match the “Supported account types” on your Azure app registration.
+            {teams.connected ? ' Disconnect to change.' : ''}
+          </p>
         </div>
         <div style={{ marginTop: 14, display: 'flex', gap: 10, alignItems: 'center' }}>
           {teams.connected ? (
